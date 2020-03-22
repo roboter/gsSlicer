@@ -9,7 +9,6 @@ namespace gs
 	{
 		List<T> Path;
 		ToolpathTypes _pathtype;	// access via Type property
-        FillTypeFlags _pathtype_flags = FillTypeFlags.Unknown;
 
         // todo: add speed
         //  ?? extend PolyLine3d ??
@@ -61,10 +60,7 @@ namespace gs
 			set { _pathtype = value; }
 		}
 
-        public FillTypeFlags TypeModifiers {
-            get { return _pathtype_flags; }
-            set { _pathtype_flags = value; }
-        }
+        public FillTypeFlags TypeModifiers{ get; set; }
 
         public virtual Vector3d StartPosition {
 			get {
@@ -88,23 +84,24 @@ namespace gs
 		public bool HasFinitePositions {
 			get { return true; }
 		}
+
 		public IEnumerable<Vector3d> AllPositionsItr() {
 			foreach (var v in Path)
 				yield return v.Position;
 		}
 
-
 		public IEnumerator<T> GetEnumerator() {
 			return Path.GetEnumerator();
 		}
+
 		IEnumerator IEnumerable.GetEnumerator() {
 			return Path.GetEnumerator();
 		}
 
-
 		public int VertexCount {
 			get { return Path.Count; }
 		}
+
         public void AppendVertex(T v, TPVertexFlags flags) {
             if (Path.Count == 0 || ((flags & TPVertexFlags.IsPathStart) != 0)) { 
                 Path.Add(v);

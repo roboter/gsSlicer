@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -7,37 +8,6 @@ using g3;
 
 namespace gs
 {
-
-	/// <summary>
-	/// PrintLayerData is set of information for a single print layer
-	/// </summary>
-	public class PrintLayerData
-	{
-		public int layer_i;
-		public PlanarSlice Slice;
-		public SingleMaterialFFFSettings Settings;
-
-		public PrintLayerData PreviousLayer;
-
-		public ToolpathSetBuilder PathAccum;
-		public IFillPathScheduler2d Scheduler;
-
-		public List<IShellsFillPolygon> ShellFills;
-        public List<GeneralPolygon2d> SupportAreas;
-
-		public TemporalPathHash Spatial;
-
-		public PrintLayerData(int layer_i, PlanarSlice slice, SingleMaterialFFFSettings settings) {
-			this.layer_i = layer_i;
-			Slice = slice;
-			Settings = settings;
-			Spatial = new TemporalPathHash();
-		}
-	}
-
-
-
-
     /// <summary>
     /// This is the top-level class that generates a GCodeFile for a stack of slices.
     /// Currently must subclass to provide resulting GCodeFile.
@@ -47,7 +17,7 @@ namespace gs
         // Data structures that must be provided by client
         public PrintMeshAssembly PrintMeshes { get; protected set; }
         public PlanarSliceStack Slices { get; protected set; }
-        public ThreeAxisPrinterCompiler Compiler { get; protected set; }
+        public IThreeAxisPrinterCompiler Compiler { get; protected set; }
         public SingleMaterialFFFSettings Settings;      // public because you could modify
                                                         // this during process, ie in BeginLayerF
                                                         // to implement per-layer settings
@@ -73,11 +43,6 @@ namespace gs
             System.Console.WriteLine("[EXCEPTION] ThreeAxisPrintGenerator: " + message + "\nSTACK TRACE: " + stack_trace);
         };
 
-        // use this to cancel slicer
-        public Func<bool> CancelF = () => { return false; };
-
-        // will be set to true if CancelF() ever returns true
-        public bool WasCancelled = false;
 
 
         // Replace this if you want to customize PrintLayerData type
@@ -96,9 +61,11 @@ namespace gs
         // implement progress bar, etc
         public Action<PrintLayerData> BeginLayerF;
 
-		// This is called before we process each shell. The Tag is transferred
-		// from the associated region in the PlanarSlice, if it had one, otherwise it is int.MaxValue
-		public Action<IFillPolygon, int> BeginShellF;
+        //public Func<int> CustomCommandAtBeginLevel;
+
+        // This is called before we process each shell. The Tag is transferred
+        // from the associated region in the PlanarSlice, if it had one, otherwise it is int.MaxValue
+        public Action<IFillPolygon, int> BeginShellF;
 
         // called at the end of each layer, before we compile the paths
         public ILayerPathsPostProcessor LayerPostProcessor;
@@ -110,7 +77,7 @@ namespace gs
 
         // Called after we have finished print generation, use this to post-process the paths, etc.
         // By default appends a comment block with print time statistics
-        public Action<ThreeAxisPrinterCompiler, ThreeAxisPrintGenerator> PostProcessCompilerF 
+        public Action<IThreeAxisPrinterCompiler, ThreeAxisPrintGenerator> PostProcessCompilerF 
             = PrintGeneratorDefaults.AppendPrintTimeStatistics;
 
         /// <summary>
@@ -128,18 +95,15 @@ namespace gs
         public ThreeAxisPrintGenerator(PrintMeshAssembly meshes, 
                                        PlanarSliceStack slices,
                                        SingleMaterialFFFSettings settings,
-                                       ThreeAxisPrinterCompiler compiler)
+                                       IThreeAxisPrinterCompiler compiler)
         {
             Initialize(meshes, slices, settings, compiler);
         }
 
-
-
-
         public void Initialize(PrintMeshAssembly meshes, 
                                PlanarSliceStack slices,
                                SingleMaterialFFFSettings settings,
-                               ThreeAxisPrinterCompiler compiler)
+                               IThreeAxisPrinterCompiler compiler)
         {
 			
             PrintMeshes = meshes;
@@ -164,9 +128,14 @@ namespace gs
                 return new NextNearestLayerShellsSelector(layer_data.ShellFills);
             };
 
-			BeginLayerF = (layer_data) => { };
+            BeginLayerF = (layer_data) =>
+            {
+                Compiler.AppendCommand("sdasdasds");
+            };
 
-			BeginShellF = (shell_fill, tag) => { };
+          
+
+            BeginShellF = (shell_fill, tag) => { };
 
             LayerPostProcessor = null;
 
@@ -229,11 +198,6 @@ namespace gs
         protected int CurStartLayer;
         protected int CurEndLayer;
 
-
-
-
-
-
         /// <summary>
         /// This is the main driver of the slicing process
         /// </summary>
@@ -257,7 +221,7 @@ namespace gs
 				Slices.BuildSliceSpatialCaches(true);
 			}
 
-            if (Cancelled()) return;
+
 
             // initialize compiler and get start nozzle position
             Compiler.Begin();
@@ -265,17 +229,16 @@ namespace gs
             // We need N above/below shell paths to do roof/floors, and *all* shells to do support.
             // Also we can compute shells in parallel. So we just precompute them all here.
             precompute_shells();
-            if (Cancelled()) return;
+
             int nLayers = Slices.Count;
 
             // compute roofs/floors in parallel based on shells
             precompute_roofs_floors();
-            if (Cancelled()) return;
+
 
             // [TODO] use floor areas to determine support now?
-
             precompute_support_areas();
-            if (Cancelled()) return;
+
 
 			PrintLayerData prevLayerData = null;
 
@@ -285,7 +248,7 @@ namespace gs
             CurStartLayer = Math.Max(0, Settings.LayerRangeFilter.a);
             CurEndLayer = Math.Min(nLayers-1, Settings.LayerRangeFilter.b);
             for ( int layer_i = CurStartLayer; layer_i <= CurEndLayer; ++layer_i ) {
-                if (Cancelled()) return;
+
 
                 // allocate new layer data structure
                 SingleMaterialFFFSettings layerSettings = MakeLayerSettings(layer_i);
@@ -303,10 +266,14 @@ namespace gs
                 //GroupScheduler groupScheduler = new PassThroughGroupScheduler(layerScheduler, Compiler.NozzlePosition.xy);
                 layerdata.Scheduler = groupScheduler;
 
-                BeginLayerF(layerdata);
                 Compiler.AppendComment(string.Format("layer {0} - {1}mm", layer_i, Compiler.NozzlePosition.z));
+                BeginLayerF(layerdata);
+                
+                //Compiler.AppendCommand("11010011");
+                //CustomCommandAtBeginLevel();
 
-				layerdata.ShellFills = get_layer_shells(layer_i);
+
+                layerdata.ShellFills = get_layer_shells(layer_i);
 
                 bool is_infill = (layer_i >= Settings.FloorLayers && layer_i < nLayers - Settings.RoofLayers - 1);
 
@@ -329,7 +296,7 @@ namespace gs
                     groupScheduler.EndGroup();
                     layerdata.SupportAreas = support_areas;
                 }
-                if (Cancelled()) return;
+
                 count_progress_step();
 
                 // selector determines what order we process shells in
@@ -350,7 +317,7 @@ namespace gs
                         groupScheduler.AppendCurveSets(shells_gen_paths.GetRange(0, shells_gen_paths.Count - 1));
                     }
                     groupScheduler.EndGroup();
-                    if (Cancelled()) return;
+
                     count_progress_step();
 
                     // allow client to do configuration (eg change settings for example)
@@ -378,7 +345,7 @@ namespace gs
                     groupScheduler.BeginGroup();
                     fill_infill_regions(infill_regions, groupScheduler, layerdata);
                     groupScheduler.EndGroup();
-                    if (Cancelled()) return;
+
                     count_progress_step();
 
                     groupScheduler.BeginGroup();
@@ -389,7 +356,7 @@ namespace gs
 
                     shells_gen = shellSelector.Next(groupScheduler.CurrentPosition);
                 }
-                if (Cancelled()) return;
+
 
                 // append open paths
                 groupScheduler.BeginGroup();
@@ -400,7 +367,7 @@ namespace gs
                 layerdata.Scheduler = groupScheduler.TargetScheduler;
 
 				// last chance to post-process paths for this layer before they are baked in
-                if (Cancelled()) return;
+
                 if ( LayerPostProcessor != null )
                     LayerPostProcessor.Process(layerdata, pathAccum.Paths);
 
@@ -418,7 +385,7 @@ namespace gs
 
                 // compile this layer 
                 // [TODO] we could do this in a separate thread, in a queue of jobs?
-                if (Cancelled()) return;
+
                 Compiler.AppendPaths(pathAccum.Paths, layerSettings);
 
                 // add this layer to running pathset
@@ -428,7 +395,6 @@ namespace gs
                 // we might want to consider this layer while we process next one
                 prevLayerData = layerdata;
 
-                if (Cancelled()) return;
                 count_progress_step();
             }
 
@@ -861,13 +827,6 @@ namespace gs
             scheduler.AppendCurveSets(new List<FillCurveSet2d>() { paths });
         }
 
-
-
-
-
-
-
-
         // The set of perimeter fills for each layer. 
         // If we have sparse infill, we need to have multiple shells available to do roof/floors.
         // To do support, we ideally would have them all.
@@ -902,7 +861,7 @@ namespace gs
 
             Interval1i solve_shells = new Interval1i(start_layer, end_layer);
             gParallel.ForEach(solve_shells, (layeri) => {
-                if (Cancelled()) return;
+
                 PlanarSlice slice = Slices[layeri];
                 LayerShells[layeri] = compute_shells_for_slice(slice);
                 count_progress_step();
@@ -984,7 +943,7 @@ namespace gs
             int end_layer = Math.Min(nLayers - 1, Settings.LayerRangeFilter.b);
             Interval1i solve_roofs_floors = new Interval1i(start_layer, end_layer);
             gParallel.ForEach(solve_roofs_floors, (layer_i) => {
-                if (Cancelled()) return;
+
                 bool is_infill = (layer_i >= Settings.FloorLayers && layer_i < nLayers - Settings.RoofLayers - 1);
 
                 if (is_infill) {
@@ -1072,7 +1031,7 @@ namespace gs
 			min_area *= min_area;
 
 			gParallel.ForEach(Interval1i.Range(nLayers - 1), (layeri) => {
-                if (Cancelled()) return;
+
                 PlanarSlice slice = Slices[layeri];
 				PlanarSlice next_slice = Slices[layeri + 1];
 
@@ -1181,7 +1140,7 @@ namespace gs
 			// For layer i, compute support region needed to support layer (i+1)
 			// This is the *absolute* support area - no inset for filament width or spacing from model
 			gParallel.ForEach(Interval1i.Range(nLayers - 1), (layeri) => {
-                if (Cancelled()) return;
+
                 PlanarSlice slice = Slices[layeri];
 				PlanarSlice next_slice = Slices[layeri + 1];
 
@@ -1285,7 +1244,7 @@ namespace gs
 			// that layers solids. 
 			List<GeneralPolygon2d> prevSupport = LayerSupportAreas[nLayers - 1];
             for (int i = nLayers - 2; i >= 0; --i) {
-                if (Cancelled()) return;
+
                 PlanarSlice slice = Slices[i];
 
                 // [RMS] smooth the support polygon from the previous layer. if we allow
@@ -1391,7 +1350,6 @@ namespace gs
                 return;
 
             gParallel.ForEach(Interval1i.Range(Slices.Count), (i) => {
-                if (Cancelled()) return;
                 PlanarSlice slice = Slices[i];
                 if (slice.SupportSolids.Count == 0)
                     return;
@@ -1519,18 +1477,6 @@ namespace gs
             Interlocked.Increment(ref CurProgress);
         }
 
-
-        protected virtual bool Cancelled()
-        {
-            if (WasCancelled)
-                return true;
-            bool cancel = CancelF();
-            if (cancel) {
-                WasCancelled = true;
-                return true;
-            }
-            return false;
-        }
 
 
     }

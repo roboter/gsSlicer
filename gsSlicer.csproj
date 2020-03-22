@@ -44,7 +44,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="compilers\ThreeAxisMillingCompiler.cs" />
+    <Compile Include="compilers\IThreeAxisPrinterCompiler.cs" />
     <Compile Include="generators\PrintGeneratorDefaults.cs" />
+    <Compile Include="generators\PrintLayerData.cs" />
     <Compile Include="generators\PrintMeshAssembly.cs" />
     <Compile Include="slicing\BaseSlicer.cs" />
     <Compile Include="slicing\MeshPlanarMillSlicer.cs" />

@@ -17,7 +17,7 @@ namespace gs
          */
 
         public static void AppendPrintTimeStatistics(
-            ThreeAxisPrinterCompiler compiler, ThreeAxisPrintGenerator printgen)
+            IThreeAxisPrinterCompiler compiler, ThreeAxisPrintGenerator printgen)
         {
             compiler.AppendComment("".PadRight(79, '-'));
             foreach (string line in printgen.TotalPrintTimeStatistics.ToStringList()) {

@@ -168,11 +168,9 @@ namespace gs
         }
 
 
-
         protected virtual void emit_message(string text, params object[] args)
         {
-            if (EmitMessageF != null)
-                EmitMessageF(string.Format(text, args));
+            EmitMessageF?.Invoke(string.Format(text, args));
         }
 
     }

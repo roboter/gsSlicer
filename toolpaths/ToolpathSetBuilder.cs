@@ -69,6 +69,7 @@ namespace gs
 		{
 			return AppendTravel(new Vector3d(toPos.x, toPos.y, currentPos.z), fSpeed);
 		}
+
 		public virtual Vector3d AppendTravel(Vector3d toPos, double fSpeed)
 		{
 			LinearToolpath travel = new LinearToolpath(ToolpathTypes.Travel);
@@ -78,6 +79,7 @@ namespace gs
 				AppendPath(travel);
 			return currentPos;
 		}
+
 		public virtual Vector3d AppendTravel(List<Vector2d> toPoints, double fSpeed)
         {
 			LinearToolpath travel = new LinearToolpath(ToolpathTypes.Travel);
@@ -106,8 +108,6 @@ namespace gs
 			return currentPos;
 		}
 
-
-
         public virtual Vector3d AppendExtrude(Vector2d toPos, double fSpeed,
             FillTypeFlags pathTypeFlags = FillTypeFlags.Unknown)
         {
@@ -123,8 +123,6 @@ namespace gs
             AppendPath(extrusion);
             return currentPos;
         }
-
-
 
         public virtual Vector3d AppendExtrude(List<Vector2d> toPoints, double fSpeed, 
             FillTypeFlags pathTypeFlags = FillTypeFlags.Unknown,
@@ -159,11 +157,6 @@ namespace gs
 			return currentPos;
 		}
 
-
-
-
-
-
 		public virtual Vector3d AppendExtrude(List<Vector3d> toPoints, double fSpeed, 
             FillTypeFlags pathTypeFlags = FillTypeFlags.Unknown,
             List<TPVertexFlags> perVertexFlags = null)
@@ -180,8 +173,6 @@ namespace gs
 			AppendPath(extrusion);
 			return currentPos;
 		}
-
-
 
 		/// <summary>
 		/// Dwell for a number of milliseconds (1000ms=1s). Optionally, retract/unretract.
@@ -203,7 +194,6 @@ namespace gs
 			};
 			AppendPath(dwell_path);			
 		}
-
 
         /// <summary>
         /// Command toolpaths are used to pass special commands/etc to compiler.

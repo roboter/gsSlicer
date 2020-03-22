@@ -19,6 +19,7 @@ namespace gs
     {
         public double ExtrudeTimeS = 0;
         public double TravelTimeS = 0;
+        public double Volume = 0;
 
         public double TotalTimeS
         {
@@ -32,6 +33,7 @@ namespace gs
         {
             ExtrudeTimeS += other.ExtrudeTimeS;
             TravelTimeS += other.TravelTimeS;
+            Volume += other.Volume;
         }
 
         public List<string> ToStringList()
@@ -111,12 +113,10 @@ namespace gs
                     TimeStatistics.ExtrudeTimeS += path_time;
                 else
                     TimeStatistics.TravelTimeS += path_time;
+               // TimeStatistics.Volume += path.
             }
 
-        } // Calculate()
-
-
-
+        }
 
         /// <summary>
         /// Scale the extrusion speeds by the given scale factor
